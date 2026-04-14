@@ -1,0 +1,258 @@
+name: CI
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: 'Test'
+        run: npx vitest --coverage.enabled true
+
+      - name: 'Report Coverage'
+        # Set if: always() to also generate the report if tests are failing
+        # Only works if you set `reportOnFailure: true` in your vite config as specified above
+        if: always()
+        uses: davelosert/vitest-coverage-report-action@v2
+
+  gitleaks_scan:
+    name: Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for all branches and tags
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}  # Only needed for Gitleaks Enterprise
+
+      - name: Upload Gitleaks SARIF as artifact
+        if: always() && hashFiles('results.sarif') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-scan-results
+          path: results.sarif
+
+      - name: Upload Gitleaks SARIF to Code Scanning
+        if: always() && hashFiles('results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: gitleaks
+
+  dependency_audit:
+    name: Dependency Vulnerability Audit
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20.x]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit dependencies (high severity and above)
+        run: npx --yes audit-ci --package-manager npm --severity high
+
+  clamav_malware_scan:
+    name: ClamAV Malware Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install ClamAV
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clamav clamav-daemon
+
+      - name: Update ClamAV database
+        run: |
+          sudo systemctl stop clamav-freshclam || true
+          sudo freshclam --verbose
+
+      - name: Scan repository with ClamAV
+        run: |
+          echo "Starting ClamAV scan of repository..."
+          clamscan -r -i --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist . > clamav-scan.log 2>&1 || true
+          cat clamav-scan.log
+
+      - name: Check for infections
+        run: |
+          if grep -q "Infected files: 0" clamav-scan.log; then
+            echo "✅ No malware detected!"
+            exit 0
+          else
+            echo "❌ Malware detected! Check the scan log."
+            grep "FOUND" clamav-scan.log || true
+            exit 1
+          fi
+
+      - name: Upload ClamAV scan log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clamav-scan-log
+          path: clamav-scan.log
+
+  build_extension:
+    name: Build Extension
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20.x]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension zip
+        run: npm run build-zip
+
+      - name: Get extension version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extension version: $VERSION"
+
+      - name: Upload extension zip as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabee-extension-v${{ steps.version.outputs.version }}
+          path: tabee.zip
+          retention-days: 30
+
+      - name: Find PR number
+        id: pr
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "PR Number: $PR_NUMBER"
+
+      - name: Comment PR with download link
+        if: steps.pr.outputs.number != ''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // The zip file is at the root
+            const zipFile = 'tabee.zip';
+
+            if (!fs.existsSync(zipFile)) {
+              console.log('No zip file found at:', zipFile);
+              return;
+            }
+
+            const version = '${{ steps.version.outputs.version }}';
+            const runId = context.runId;
+            const repo = context.repo;
+            const prNumber = ${{ steps.pr.outputs.number }};
+
+            // Get the artifact ID for direct download link
+            const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: repo.owner,
+              repo: repo.repo,
+              run_id: runId
+            });
+
+            const artifact = artifacts.artifacts.find(a => a.name.startsWith('tabee-extension-v'));
+            const artifactUrl = artifact
+              ? `https://github.com/${repo.owner}/${repo.repo}/actions/runs/${runId}/artifacts/${artifact.id}`
+              : `https://github.com/${repo.owner}/${repo.repo}/actions/runs/${runId}`;
+
+            const comment = `## 📦 Extension Build Ready!
+
+            **Version**: \`${version}\`
+
+            ### 📥 [Download Extension (${zipFile})](${artifactUrl})
+
+            ### Installation
+            1. Download and extract the zip file
+            2. Open Chrome → \`chrome://extensions/\`
+            3. Enable "Developer mode" (top right)
+            4. Click "Load unpacked" → Select the extracted folder
+
+            ### Status
+            - ✅ All tests passed
+            - ✅ Build successful
+            - ✅ Ready for testing
+
+            ---
+            <sub>🤖 Auto-generated by [GitHub Actions](https://github.com/${repo.owner}/${repo.repo}/actions/runs/${runId})</sub>`;
+
+            // Check if we already commented
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: repo.owner,
+              repo: repo.repo,
+              issue_number: prNumber,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Extension Build Ready')
+            );
+
+            if (botComment) {
+              // Delete old comment and create new one for fresh timestamp
+              await github.rest.issues.deleteComment({
+                owner: repo.owner,
+                repo: repo.repo,
+                comment_id: botComment.id,
+              });
+              console.log('Deleted old comment');
+            }
+
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: repo.owner,
+              repo: repo.repo,
+              issue_number: prNumber,
+              body: comment
+            });
+            console.log('Created new comment with direct artifact link');

@@ -1,0 +1,54 @@
+{
+  "name": "tabee",
+  "private": true,
+  "version": "1.1.6",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "vitest --run",
+    "watch:test": "vitest",
+    "watch:coverage": "npx vitest --coverage.enabled true",
+    "coverage": "npx vitest --run --coverage.enabled true",
+    "dev": "rm -rf ./dist && vite",
+    "tsc": "vue-tsc",
+    "build": "rm -rf ./dist && vite build",
+    "preview": "vite preview",
+    "build-zip": "rm -rf ./dist && rm -f tabee.zip && npm run build && cd ./dist && zip -r ../tabee.zip *"
+  },
+  "dependencies": {
+    "lz-string": "^1.5.0",
+    "mitt": "^3.0.1",
+    "pinia": "^2.1.7",
+    "vue": "^3.4.21",
+    "vuedraggable": "^4.1.0"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0-beta.26",
+    "@types/chrome": "^0.0.268",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@vitejs/plugin-vue": "^6.0.4",
+    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/ui": "^4.0.18",
+    "@vue/eslint-config-typescript": "^13.0.0",
+    "autoprefixer": "^10.4.19",
+    "daisyui": "^4.12.2",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.25.2",
+    "eslint-plugin-prettier": "^5.2.1",
+    "eslint-plugin-vue": "^9.26.0",
+    "jsdom": "^27.0.0",
+    "postcss": "^8.4.38",
+    "prettier": "^3.3.3",
+    "tailwindcss": "^3.4.13",
+    "typescript": "*",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18",
+    "vue-eslint-parser": "^9.4.2",
+    "vue-tsc": "^2.0.24"
+  },
+  "overrides": {
+    "cross-spawn": "^7.0.5"
+  }
+}

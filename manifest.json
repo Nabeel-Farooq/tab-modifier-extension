@@ -1,0 +1,81 @@
+{
+  "manifest_version": 3,
+  "name": "Tabee: Tab Modifier",
+  "version": "1.1.6",
+  "description": "The original Tab Modifier reborn — rename, organize, and control your browser tabs effortlessly.",
+  "homepage_url": "https://github.com/furybee/chrome-tab-modifier",
+  "action": {
+    "default_title": "Tabee",
+    "default_icon": {
+      "16": "assets/icon_16.png",
+      "32": "assets/icon_32.png",
+      "48": "assets/icon_48.png",
+      "128": "assets/icon_128.png"
+    }
+  },
+  "icons": {
+    "16": "assets/icon_16.png",
+    "32": "assets/icon_32.png",
+    "48": "assets/icon_48.png",
+    "128": "assets/icon_128.png"
+  },
+  "background": {
+    "service_worker": "src/background.ts",
+    "type": "module"
+  },
+  "options_page": "src/options.html",
+  "side_panel": {
+    "default_path": "src/sidepanel.html"
+  },
+  "web_accessible_resources": [{
+    "resources": [
+      "assets/*",
+      "assets/*/*",
+      "vendor/*",
+      "vendor/*/*"
+    ],
+    "matches": [
+      "<all_urls>"
+    ]
+  }],
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": [
+      "src/content.ts"
+    ]
+  }],
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "storage",
+    "contextMenus",
+    "scripting",
+    "sidePanel",
+    "bookmarks",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "commands": {
+    "merge-windows": {
+      "suggested_key": {
+        "default": "Alt+Shift+W",
+        "linux": "Alt+Shift+W",
+        "mac": "Command+Shift+W",
+        "windows": "Alt+Shift+W"
+      },
+      "description": "Merge windows"
+    },
+    "spot-search": {
+      "suggested_key": {
+        "default": "Alt+Shift+E",
+        "linux": "Alt+Shift+E",
+        "mac": "Command+Shift+E",
+        "windows": "Alt+Shift+E"
+      },
+      "description": "Search tabs and bookmarks"
+    }
+  }
+}

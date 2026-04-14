@@ -1,0 +1,309 @@
+<template>
+	<div class="flex h-screen w-screen overflow-hidden">
+		<div class="drawer lg:drawer-open overflow-hidden">
+			<input id="drawer-menu" class="drawer-toggle" type="checkbox" />
+			<div class="drawer-content flex flex-col items-center justify-center overflow-auto relative">
+				<div class="absolute inset-0 opacity-10 pointer-events-none">
+					<div class="pattern-background"></div>
+				</div>
+				<div class="h-screen w-full relative z-10">
+					<div class="navbar bg-base-200">
+						<div class="navbar-start flex-col items-start gap-0">
+							<div class="flex items-center w-full">
+								<label
+									class="btn btn-circle swap swap-rotate drawer-button lg:hidden"
+									for="drawer-menu"
+								>
+									<input type="checkbox" />
+									<BurgerIcon />
+									<CloseIcon />
+								</label>
+
+								<div class="ml-4">
+									<h1 class="text-lg font-semibold">
+										{{ currentContent.title }}
+									</h1>
+									<p v-if="currentContent.description" class="text-xs text-base-content/60">
+										{{ currentContent.description }}
+									</p>
+								</div>
+							</div>
+						</div>
+
+						<div class="navbar-end mr-2 flex gap-2">
+							<!-- Search bar for Rules -->
+							<label
+								v-if="hasRules && currentContent.component === 'TabRulesPane'"
+								class="input input-xs input-bordered flex items-center gap-2 w-48 focus-within:w-64 transition-all"
+							>
+								<input
+									ref="searchInput"
+									v-model="searchQuery"
+									type="text"
+									class="grow min-w-0"
+									placeholder="Search rules..."
+									@input="onSearchInput"
+									@keydown.escape="clearSearch"
+								/>
+								<button
+									v-if="searchQuery"
+									class="btn btn-xs btn-ghost btn-circle"
+									@click="clearSearch"
+								>
+									<CloseIcon class="!w-3 !h-3" />
+								</button>
+								<template v-else>
+									<kbd class="kbd kbd-xs">{{ isMac ? '⌘' : 'Ctrl' }}</kbd>
+									<kbd class="kbd kbd-xs">K</kbd>
+								</template>
+							</label>
+							<button
+								v-if="
+									FEATURE_FLAGS.ENABLE_RULE_COPY_PASTE &&
+									hasRules &&
+									currentContent.component === 'TabRulesPane'
+								"
+								class="btn btn-xs btn-ghost tooltip tooltip-left flex items-center justify-center"
+								data-tip="Paste rule from clipboard"
+								@click="pasteRule"
+							>
+								<ClipboardIcon class="!w-4 !h-4" />
+								Paste rule
+							</button>
+							<a
+								v-if="hasRules && currentContent.component === 'TabRulesPane'"
+								class="btn btn-xs btn-circle btn-primary"
+								@click="openAddModal"
+							>
+								<PlusIcon class="!w-3 !h-3" />
+							</a>
+							<a
+								v-if="hasGroups && currentContent.component === 'TabGroupsPane'"
+								class="btn btn-xs btn-circle btn-primary"
+								@click="openAddGroupModal"
+							>
+								<PlusIcon class="!w-3 !h-3" />
+							</a>
+						</div>
+					</div>
+
+					<component :is="panes[currentContent.component]" v-if="currentContent.component" />
+
+					<Toaster />
+				</div>
+			</div>
+			<div class="drawer-side z-50">
+				<label aria-label="close sidebar" class="drawer-overlay" for="drawer-menu" />
+
+				<div class="h-full bg-base-300">
+					<div class="px-8 pt-4">
+						<h1 class="text-xl font-bold flex items-center gap-2">
+							<img src="/assets/icon_32.png" alt="Tabee icon" class="w-5 h-5" />
+							Tabee
+						</h1>
+						<p class="text-xs text-base-content/70 mt-1">The original Tab Modifier.</p>
+					</div>
+
+					<Menu :menu-items="sectionItems" title="Sections" @on-menu-clicked="onMenuClicked" />
+
+					<div class="divider divider-base-200 my-0" />
+
+					<Menu :menu-items="resourceItems" title="Resources" @on-menu-clicked="onMenuClicked" />
+				</div>
+			</div>
+		</div>
+	</div>
+</template>
+
+<script lang="ts" setup>
+import Menu from './components/options/left/Menu.vue';
+import { Components, GLOBAL_EVENTS, MenuItem } from './common/types.ts';
+import { computed, inject, onMounted, onUnmounted, ref } from 'vue';
+import TabRulesPane from './components/options/center/sections/TabRulesPane.vue';
+import TabGroupsPane from './components/options/center/sections/TabGroupsPane.vue';
+import TabHivePane from './components/options/center/sections/TabHivePane.vue';
+import SettingsPane from './components/options/center/sections/SettingsPane.vue';
+import HelpPane from './components/options/center/sections/HelpPane.vue';
+import DonationPane from './components/options/center/resources/DonationPane.vue';
+import BurgerIcon from './components/icons/BurgerIcon.vue';
+import CloseIcon from './components/icons/CloseIcon.vue';
+import ClipboardIcon from './components/icons/ClipboardIcon.vue';
+import { useRulesStore } from './stores/rules.store.ts';
+import Toaster from './components/global/Toaster.vue';
+import PlusIcon from './components/icons/PlusIcon.vue';
+import { useMenuStore } from './stores/menu.store.ts';
+import { FEATURE_FLAGS } from './common/feature-flags.ts';
+
+const emitter: any = inject('emitter');
+
+const panes: Components = {
+	TabRulesPane,
+	TabGroupsPane,
+	TabHivePane,
+	SettingsPane,
+	HelpPane,
+	DonationPane,
+};
+
+const sectionItems = [
+	{
+		title: 'Rules',
+		emoji: '📋',
+		description: 'Customize tabs based on URL patterns',
+		component: 'TabRulesPane',
+	},
+	{
+		title: 'Groups',
+		emoji: '🗂️',
+		description: 'Organize your tabs with custom groups',
+		component: 'TabGroupsPane',
+	},
+	{
+		title: 'Tab Hive',
+		emoji: '🍯',
+		description: 'Manage closed tabs and settings',
+		component: 'TabHivePane',
+	},
+	{
+		title: 'Settings',
+		emoji: '⚙️',
+		description: 'Configure performance and preferences',
+		component: 'SettingsPane',
+	},
+	{
+		title: 'Help',
+		emoji: '❓',
+		description: 'Learn how to use Tabee features',
+		component: 'HelpPane',
+	},
+] as MenuItem[];
+
+const resourceItems = [
+	{
+		title: 'Chrome Web Store',
+		emoji: '🌐',
+		link: 'https://chrome.google.com/webstore/detail/tab-modifier/penegkenfmliefdbmnfkidlgjfjcidia',
+	},
+	{
+		title: 'GitHub',
+		emoji: '💻',
+		link: 'https://github.com/furybee/chrome-tab-modifier',
+	},
+	{
+		title: 'Donate',
+		emoji: '💝',
+		component: 'DonationPane',
+	},
+] as MenuItem[];
+
+const rulesStore = useRulesStore();
+const menuStore = useMenuStore();
+
+const currentContent = ref<MenuItem>(sectionItems[0]);
+const searchInput = ref<HTMLInputElement | null>(null);
+const searchQuery = ref('');
+
+const onSearchInput = () => {
+	rulesStore.setSearchQuery(searchQuery.value);
+};
+
+const clearSearch = () => {
+	searchQuery.value = '';
+	rulesStore.clearSearchQuery();
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+	// Ctrl+K or Cmd+K to focus search
+	if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+		event.preventDefault();
+		if (currentContent.value.component === 'TabRulesPane' && searchInput.value) {
+			searchInput.value.focus();
+		}
+	}
+};
+
+const onMenuClicked = (menuItem: MenuItem) => {
+	currentContent.value = menuItem;
+
+	menuStore.setCurrentMenuItem(menuItem);
+
+	// Clear search when navigating away from rules
+	if (menuItem.component !== 'TabRulesPane') {
+		clearSearch();
+	}
+
+	const drawerMenu = document.getElementById('drawer-menu') as HTMLInputElement;
+	drawerMenu.checked = false;
+};
+
+const openAddModal = () => {
+	emitter.emit(GLOBAL_EVENTS.OPEN_ADD_RULE_MODAL);
+};
+
+const openAddGroupModal = () => {
+	emitter.emit(GLOBAL_EVENTS.OPEN_ADD_GROUP_MODAL);
+};
+
+const pasteRule = async () => {
+	try {
+		await rulesStore.pasteRuleFromClipboard();
+		// Refresh the store to update the UI
+		await rulesStore.init();
+		emitter.emit(GLOBAL_EVENTS.SHOW_TOAST, {
+			type: 'success',
+			message: 'Rule pasted successfully!',
+		});
+	} catch (error) {
+		if (error instanceof Error) {
+			emitter.emit(GLOBAL_EVENTS.SHOW_TOAST, {
+				type: 'error',
+				message: `Failed to paste rule: ${error.message}`,
+			});
+		} else {
+			emitter.emit(GLOBAL_EVENTS.SHOW_TOAST, {
+				type: 'error',
+				message: 'Failed to paste rule from clipboard',
+			});
+		}
+		console.error(error);
+	}
+};
+
+const hasRules = computed<boolean>(() => {
+	return rulesStore.rules.length > 0;
+});
+
+const hasGroups = computed<boolean>(() => {
+	return rulesStore.groups.length > 0;
+});
+
+const isMac = computed<boolean>(() => {
+	return navigator.platform.toLowerCase().includes('mac');
+});
+
+onMounted(async () => {
+	menuStore.setCurrentMenuItem(currentContent.value);
+
+	await rulesStore.init();
+
+	emitter.on(GLOBAL_EVENTS.NAVIGATE_TO_SETTINGS, () => {
+		onMenuClicked(sectionItems.find((item) => item.component === 'SettingsPane')!);
+	});
+
+	// Add keyboard shortcut listener
+	document.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+	document.removeEventListener('keydown', handleKeydown);
+});
+</script>
+
+<style scoped>
+.pattern-background {
+	width: 100%;
+	height: 100%;
+	background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
+	background-size: 32px 32px;
+}
+</style>
