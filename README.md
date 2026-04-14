@@ -122,10 +122,6 @@ And now, build your own... 💪
 
 ## Known issues
 
-### Local icon path doesn't work
-
-Related issue: [#5](https://github.com/furybee/chrome-tab-modifier/issues/5)
-
 Due to browser security restrictions, this path won't work: `file://<path>/icon.png`.
 Your icon will not be shown by Chrome.
 
@@ -133,23 +129,6 @@ Alternatively, you can upload your icon somewhere like [imgur.com](http://imgur.
 
 Another solution consists in transform your image in the [Data URI format](https://en.wikipedia.org/wiki/Data_URI_scheme). Go to [ezgif.com](https://ezgif.com/image-to-datauri) and paste the given output (the long text) in the icon input on your rule.
 
-### Chrome system pages `chrome://`
-
-Related issues: [#11](https://github.com/furybee/chrome-tab-modifier/issues/11), [#14](https://github.com/furybee/chrome-tab-modifier/issues/14)
-
-Pages that start with `chrome://` URL are protected. No content script can be injected then Tab Modifier will not work on these pages.
-
-### Local files `file:///`
-
-Related issue: [#13](https://github.com/furybee/chrome-tab-modifier/issues/13)
-
-By default, extensions don't have access to local files. You have to opt-in "Allow access to file URLs" from `chrome://extensions/?id=penegkenfmliefdbmnfkidlgjfjcidia`.
-
-### Protected action is not triggered
-
-Related issue: [#95](https://github.com/furybee/chrome-tab-modifier/issues/95)
-
-Since Chrome 90, the JS event that triggers a refresh or a closure has been reworked. See related issue.
 
 ## Development
 
@@ -175,16 +154,6 @@ Go to `chrome://extensions/` and enable the "Developer mode".
 
 Click on "Load unpacked extension..." and select the project `dist/` folder.
 
-## Donation
-
-A huge thanks to all donators!
-
-If you like this extension and want to support its development, you can make a donation by clicking one of the links below.
-
-- [Buy Me a Coffee](https://www.buymeacoffee.com/xyugxh7bk)
-- [Credit Card](https://donate.stripe.com/fZeg1Sgml971dbieUU)
-- [Paypal](https://www.paypal.com/donate/?hosted_button_id=T7KZA4MLT5XTU)
-
 ## Security
 
 Tabee takes security seriously. Every code change goes through automated security checks in our CI/CD pipeline:
@@ -196,7 +165,3 @@ Tabee takes security seriously. Every code change goes through automated securit
 - **ReDoS Protection**: Built-in protection against Regular Expression Denial of Service attacks
 
 For detailed security documentation, see [docs/SECURITY.md](docs/SECURITY.md).
-
-## License
-
-See [license](LICENSE.md) file.
