@@ -8,6 +8,7 @@
 		/>
 	</div>
 </template>
+
 <script setup lang="ts">
 import { useRulesStore } from './stores/rules.store.ts';
 import { onMounted, ref } from 'vue';
@@ -15,47 +16,64 @@ import RuleForm from './components/options/center/sections/TabRules/RuleForm.vue
 import { _getDefaultRule, _getRuleFromUrl } from './common/storage.ts';
 
 const rulesStore = useRulesStore();
+
 const isInit = ref(false);
 const rule = ref(_getDefaultRule('', '', 'url'));
-
 const tab = ref<chrome.tabs.Tab | null>(null);
 
+/* =========================
+   Helpers
+========================= */
 const reloadTab = () => {
 	if (!tab.value?.id) return;
-
 	chrome.tabs.reload(tab.value.id);
 };
 
-chrome.tabs.onUpdated.addListener((_: number, changeInfo: chrome.tabs.TabChangeInfo) => {
+/* =========================
+   Tab Update Listener
+========================= */
+const handleTabUpdate = async (_: number, changeInfo: chrome.tabs.TabChangeInfo) => {
 	if (!changeInfo.url) return;
 
-	_getRuleFromUrl(changeInfo.url).then((foundRule) => {
-		if (!foundRule) return;
+	const foundRule = await _getRuleFromUrl(changeInfo.url);
+	if (!foundRule) return;
 
-		rule.value = foundRule;
-		rulesStore.currentRule = foundRule;
-	});
-});
+	rule.value = foundRule;
+	rulesStore.currentRule = foundRule;
+};
 
+chrome.tabs.onUpdated.addListener(handleTabUpdate);
+
+/* =========================
+   Init
+========================= */
 onMounted(async () => {
 	await rulesStore.init();
 
-	const queryOptions = { active: true, lastFocusedWindow: true };
-	const tabs = await chrome.tabs.query(queryOptions);
+	const tabs = await chrome.tabs.query({
+		active: true,
+		lastFocusedWindow: true,
+	});
 
-	if (tabs.length === 0) return;
+	if (!tabs.length) {
+		isInit.value = true;
+		return;
+	}
 
 	tab.value = tabs[0];
 
-	if (tab.value.url) {
-		const foundRule = await _getRuleFromUrl(tab.value.url);
+	if (!tab.value?.url) {
+		isInit.value = true;
+		return;
+	}
 
-		if (!foundRule) {
-			rule.value.url_fragment = tab.value.url;
-		} else {
-			rule.value = foundRule;
-			rulesStore.currentRule = foundRule;
-		}
+	const foundRule = await _getRuleFromUrl(tab.value.url);
+
+	if (foundRule) {
+		rule.value = foundRule;
+		rulesStore.currentRule = foundRule;
+	} else {
+		rule.value.url_fragment = tab.value.url;
 	}
 
 	isInit.value = true;
