@@ -4,8 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Tooltip */
+/* ==========================================================================
+   Tooltip
+   ========================================================================== */
+
 .tooltip::before {
     white-space: nowrap;
     max-width: unset;
+    pointer-events: none;
 }
