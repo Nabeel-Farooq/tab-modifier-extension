@@ -11,41 +11,106 @@ import {
 	initDebugMode,
 } from './content/debugLog';
 
+// ============================================================
+// Types
+// ============================================================
+
+enum RuntimeAction {
+	OPEN_PROMPT = 'openPrompt',
+	APPLY_RULE = 'applyRule',
+	UNGROUP_TAB = 'ungroupTab',
+	TOGGLE_SPOT_SEARCH = 'toggleSpotSearch',
+	SPOT_SEARCH_RESULTS = 'spotSearchResults',
+	RENAME_TAB = 'renameTab',
+}
+
+interface SpotSearchTab {
+	id: number;
+	title: string;
+	url: string;
+	favIconUrl?: string;
+}
+
+interface SpotSearchBookmark {
+	id: string;
+	title: string;
+	url?: string;
+}
+
+interface ApplyRuleMessage {
+	action: RuntimeAction.APPLY_RULE;
+	rule: unknown;
+}
+
+interface UngroupTabMessage {
+	action: RuntimeAction.UNGROUP_TAB;
+	tabId: number;
+}
+
+interface SpotSearchResultsMessage {
+	action: RuntimeAction.SPOT_SEARCH_RESULTS;
+	tabs: SpotSearchTab[];
+	bookmarks: SpotSearchBookmark[];
+}
+
+type RuntimeMessage =
+	| {
+			action: RuntimeAction.OPEN_PROMPT;
+	  }
+	| ApplyRuleMessage
+	| UngroupTabMessage
+	| {
+			action: RuntimeAction.TOGGLE_SPOT_SEARCH;
+	  }
+	| SpotSearchResultsMessage;
+
+// ============================================================
+// Content Application
+// ============================================================
+
 class ContentApp {
-	private regexService: RegexService;
-	private titleService: TitleService;
-	private iconService: IconService;
-	private storageService: StorageService;
-	private ruleService: RuleApplicationService;
-	private spotSearchUI: SpotSearchUI;
-	private urlDetector: UrlChangeDetector;
+	private initialized = false;
 
-	constructor() {
-		this.regexService = new RegexService();
+	private readonly regexService = new RegexService();
 
-		this.titleService = new TitleService(
-			this.regexService
+	private readonly titleService =
+		new TitleService(this.regexService);
+
+	private readonly iconService =
+		new IconService();
+
+	private readonly storageService =
+		new StorageService(this.regexService);
+
+	private readonly ruleService =
+		new RuleApplicationService(
+			this.titleService,
+			this.iconService
 		);
 
-		this.iconService = new IconService();
+	private readonly spotSearchUI =
+		new SpotSearchUI();
 
-		this.storageService = new StorageService(
-			this.regexService
-		);
+	private readonly urlDetector =
+		new UrlChangeDetector();
 
-		this.ruleService =
-			new RuleApplicationService(
-				this.titleService,
-				this.iconService
-			);
+	private readonly messageHandler = (
+		request: RuntimeMessage
+	): boolean => {
+		void this.handleMessage(request);
 
-		this.spotSearchUI = new SpotSearchUI();
+		return true;
+	};
 
-		this.urlDetector =
-			new UrlChangeDetector();
-	}
+	// ========================================================
+	// Initialization
+	// ========================================================
 
 	async initialize(): Promise<void> {
+		if (this.initialized) return;
+
+		this.initialized = true;
+
 		try {
 			await this.initializeDebugMode();
 
@@ -58,46 +123,50 @@ class ContentApp {
 			await this.applyRules(location.href);
 
 			debugLog(
-				'[Tabee] ✅ Content app initialized'
+				'[Tabee:Content] ✅ Initialized'
 			);
 
 		} catch (error) {
 			console.error(
-				'[Tabee] Failed initializing app:',
+				'[Tabee:Content] Initialization failed:',
 				error
 			);
 		}
 	}
 
-	private async initializeDebugMode() {
+	private async initializeDebugMode(): Promise<void> {
 		await initDebugMode();
 
 		debugLog(
-			'[Tabee] 🛠 Debug mode initialized'
+			'[Tabee:Debug] 🛠 Debug mode initialized'
 		);
 	}
 
-	private initializeSpotSearch() {
+	private initializeSpotSearch(): void {
 		try {
 			this.spotSearchUI.init();
 
 			debugLog(
-				'[Tabee] 🔍 Spot Search initialized'
+				'[Tabee:Search] 🔍 Spot Search initialized'
 			);
 
 		} catch (error) {
 			console.error(
-				'[Tabee] Spot Search failed:',
+				'[Tabee:Search] Initialization failed:',
 				error
 			);
 		}
 	}
 
-	private setupUrlDetection() {
+	// ========================================================
+	// URL Detection
+	// ========================================================
+
+	private setupUrlDetection(): void {
 		this.urlDetector.onChange(
 			async (newUrl, oldUrl) => {
 				debugLog(
-					'[Tabee] 🔄 URL changed',
+					'[Tabee:Router] 🔄 URL changed',
 					{
 						oldUrl,
 						newUrl,
@@ -111,6 +180,10 @@ class ContentApp {
 		this.urlDetector.start();
 	}
 
+	// ========================================================
+	// Rule Handling
+	// ========================================================
+
 	private async applyRules(
 		url: string
 	): Promise<void> {
@@ -122,14 +195,14 @@ class ContentApp {
 
 			if (!rule) {
 				debugLog(
-					'[Tabee] No matching rule found'
+					'[Tabee:Rules] No matching rule found'
 				);
 
 				return;
 			}
 
 			debugLog(
-				'[Tabee] 📋 Applying rule:',
+				'[Tabee:Rules] 📋 Applying rule',
 				url
 			);
 
@@ -137,19 +210,19 @@ class ContentApp {
 
 		} catch (error) {
 			console.error(
-				'[Tabee] Failed applying rule:',
+				'[Tabee:Rules] Failed applying rule:',
 				error
 			);
 		}
 	}
 
-	private setupMessageListeners() {
-		chrome.runtime.onMessage.addListener(
-			(request) => {
-				this.handleMessage(request);
+	// ========================================================
+	// Messaging
+	// ========================================================
 
-				return true;
-			}
+	private setupMessageListeners(): void {
+		chrome.runtime.onMessage.addListener(
+			this.messageHandler
 		);
 	}
 
@@ -158,71 +231,80 @@ class ContentApp {
 	): Promise<void> {
 		try {
 			switch (request.action) {
-				case 'openPrompt':
-					return this.handleOpenPrompt();
+				case RuntimeAction.OPEN_PROMPT:
+					await this.handleOpenPrompt();
+					break;
 
-				case 'applyRule':
-					return this.ruleService.applyRule(
+				case RuntimeAction.APPLY_RULE:
+					await this.ruleService.applyRule(
 						request.rule,
 						false
 					);
+					break;
 
-				case 'ungroupTab':
-					return chrome.tabs.ungroup(
+				case RuntimeAction.UNGROUP_TAB:
+					await chrome.tabs.ungroup(
 						request.tabId
 					);
+					break;
 
-				case 'toggleSpotSearch':
-					return this.toggleSpotSearch();
+				case RuntimeAction.TOGGLE_SPOT_SEARCH:
+					this.toggleSpotSearch();
+					break;
 
-				case 'spotSearchResults':
-					return this.showSpotSearchResults(
+				case RuntimeAction.SPOT_SEARCH_RESULTS:
+					this.showSpotSearchResults(
 						request.tabs,
 						request.bookmarks
 					);
+					break;
 
 				default:
 					debugLog(
-						'[Tabee] Unknown message:',
+						'[Tabee:Messages] Unknown message',
 						request
 					);
 			}
 
 		} catch (error) {
 			console.error(
-				'[Tabee] Message handling failed:',
+				'[Tabee:Messages] Failed handling message:',
 				error
 			);
 		}
 	}
 
-	private async handleOpenPrompt() {
+	// ========================================================
+	// Actions
+	// ========================================================
+
+	private async handleOpenPrompt(): Promise<void> {
 		const title = prompt(
-			'Enter the new title'
+			'Enter the new tab title'
 		);
 
-		if (!title) return;
+		if (!title?.trim()) return;
 
 		await chrome.runtime.sendMessage({
-			action: 'renameTab',
-			title,
+			action: RuntimeAction.RENAME_TAB,
+			title: title.trim(),
 		});
 	}
 
-	private toggleSpotSearch() {
+	private toggleSpotSearch(): void {
 		debugLog(
-			'[Tabee] 🔍 Toggling Spot Search'
+			'[Tabee:Search] 🔍 Toggling Spot Search'
 		);
 
 		this.spotSearchUI.toggle();
 	}
 
 	private showSpotSearchResults(
-		tabs: unknown[],
-		bookmarks: unknown[]
-	) {
+		tabs: SpotSearchTab[],
+		bookmarks: SpotSearchBookmark[]
+	): void {
 		debugLog(
-			'[Tabee] 📑 Rendering search results',
+			'[Tabee:Search] 📑 Rendering search results',
 			{
 				tabs: tabs.length,
 				bookmarks: bookmarks.length,
@@ -235,39 +317,30 @@ class ContentApp {
 		);
 	}
 
-	destroy() {
+	// ========================================================
+	// Cleanup
+	// ========================================================
+
+	destroy(): void {
+		chrome.runtime.onMessage.removeListener(
+			this.messageHandler
+		);
+
 		this.urlDetector.stop?.();
 
 		debugLog(
-			'[Tabee] 🧹 Content app destroyed'
+			'[Tabee:Content] 🧹 Destroyed'
 		);
 	}
 }
 
-type RuntimeMessage =
-	| {
-			action: 'openPrompt';
-	  }
-	| {
-			action: 'applyRule';
-			rule: unknown;
-	  }
-	| {
-			action: 'ungroupTab';
-			tabId: number;
-	  }
-	| {
-			action: 'toggleSpotSearch';
-	  }
-	| {
-			action: 'spotSearchResults';
-			tabs: unknown[];
-			bookmarks: unknown[];
-	  };
+// ============================================================
+// Bootstrap
+// ============================================================
 
 const app = new ContentApp();
 
-app.initialize();
+void app.initialize();
 
 window.addEventListener('beforeunload', () => {
 	app.destroy();
