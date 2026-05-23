@@ -1,11 +1,11 @@
-@import url('/fonts/quicksand.css');
+@import url("/fonts/quicksand.css");
 
 @tailwind base;
 @tailwind components;
-
-.tooltip:before {
-    text-wrap: nowrap;
-    max-width: none !important;
-}
-
 @tailwind utilities;
+
+/* Tooltip */
+.tooltip::before {
+    white-space: nowrap;
+    max-width: unset;
+}
